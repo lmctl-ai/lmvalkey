@@ -173,7 +173,7 @@ else
 ifeq ($(uname_S),Darwin)
 	# Darwin
 	FINAL_LDFLAGS+= -Wl,-export_dynamic
-	FINAL_LIBS+= -ldl
+	FINAL_LIBS+= -ldl -lc++
 	# Homebrew's OpenSSL is not linked to /usr/local to avoid
 	# conflicts with the system's LibreSSL installation so it
 	# must be referenced explicitly during build.
@@ -248,17 +248,15 @@ endif
 endif
 endif
 endif
+endif
+endif
+endif
 
-ifeq ($(uname_S),Darwin)
-    FINAL_LIBS+= -lc++
-else
+ifneq ($(uname_S),Darwin)
     FINAL_LIBS+= -lstdc++
 endif
 ifneq (,$(findstring MINGW,$(uname_S))$(findstring MSYS,$(uname_S)))
     FINAL_LIBS+= -lws2_32
-endif
-endif
-endif
 endif
 
 ifdef OPENSSL_PREFIX
