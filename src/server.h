@@ -370,6 +370,7 @@ typedef enum blocking_type {
 /* Client request types */
 #define PROTO_REQ_INLINE 1
 #define PROTO_REQ_MULTIBULK 2
+#define PROTO_REQ_REST 3
 
 /* Client classes for client limits, currently used only for
  * the max-client-output-buffer limit implementation. */
@@ -1280,6 +1281,8 @@ typedef struct ClientFlags {
     uint64_t throttled : 1;                /* Currently queued in a throttler */
     uint64_t throttle_checked : 1;         /* Already passed throttle check for this command */
     uint64_t throttle_multi : 1;           /* Matches multiple throttlers */
+    uint64_t rest_client : 1;              /* Client is a REST HTTP client */
+    uint64_t rest_keep_alive : 1;          /* REST HTTP connection is keep-alive */
 } ClientFlags;
 /* Ensure ClientFlags never silently grows beyond two uint64_t words.
  * If this fires, move a flag to a separate field or widen the limit. */
@@ -1925,6 +1928,8 @@ struct valkeyServer {
     char *bind_source_addr;                /* Source address to bind on for outgoing connections */
     char *unixsocket;                      /* UNIX socket path */
     connListener listeners[CONN_TYPE_MAX]; /* TCP/Unix/TLS even more types */
+    int rest_port;                         /* REST HTTP listening port */
+    connListener rest_listener;            /* REST HTTP listener */
     uint32_t socket_mark_id;               /* ID for listen socket marking */
     connListener clistener;                /* Cluster bus listener */
     list *clients;                         /* List of active clients */

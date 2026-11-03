@@ -43,6 +43,7 @@
 #include "stat_calc.h"
 #include "module.h"
 #include "connection.h"
+#include "rest.h"
 #include "zmalloc.h"
 #include <strings.h>
 #include <sys/socket.h>
@@ -274,6 +275,7 @@ static int clientEverAuthenticated(client *c) {
 }
 
 int authRequired(client *c) {
+    if (c->reqtype == PROTO_REQ_REST || c->flag.rest_client) return 0;
     /* Check if the user is authenticated. This check is skipped in case
      * the default user is flagged as "nopass" and is active. */
     int auth_required = (!(DefaultUser->flags & USER_FLAG_NOPASS) || (DefaultUser->flags & USER_FLAG_DISABLED)) &&
@@ -2159,6 +2161,10 @@ void acceptCommonHandler(connection *conn, struct ClientFlags flags, char *ip) {
 
     /* Last chance to keep flags */
     if (flags.unix_socket) c->flag.unix_socket = 1;
+    if (flags.rest_client) {
+        c->flag.rest_client = 1;
+        c->reqtype = PROTO_REQ_REST;
+    }
 
     /* Initiate accept.
      *
@@ -4441,6 +4447,9 @@ int processCommandAndResetClient(client *c) {
     client *old_client = server.current_client;
     server.current_client = c;
     if (processCommand(c) == C_OK) {
+        if (c->flag.rest_client) {
+            processRestReply(c);
+        }
         commandProcessed(c);
         /* Update the client's memory to include output buffer growth following the
          * processed command. */
@@ -4514,6 +4523,9 @@ void parseInputBuffer(client *c) {
     if (!c->reqtype) {
         if (c->querybuf[c->qb_pos] == '*') {
             c->reqtype = PROTO_REQ_MULTIBULK;
+        } else if (c->flag.rest_client || isHttpRequest(c->querybuf + c->qb_pos, sdslen(c->querybuf) - c->qb_pos)) {
+            c->reqtype = PROTO_REQ_REST;
+            c->flag.rest_client = 1;
         } else {
             c->reqtype = PROTO_REQ_INLINE;
         }
@@ -4523,6 +4535,8 @@ void parseInputBuffer(client *c) {
         parseInlineBuffer(c);
     } else if (c->reqtype == PROTO_REQ_MULTIBULK) {
         parseMultibulkBuffer(c);
+    } else if (c->reqtype == PROTO_REQ_REST) {
+        parseRestBuffer(c);
     } else {
         serverPanic("Unknown request type");
     }

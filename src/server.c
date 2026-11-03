@@ -48,6 +48,7 @@
 #include "syscheck.h"
 #include "threads_mngr.h"
 #include "fmtargs.h"
+#include "rest.h"
 #include "io_threads.h"
 #include "compression.h"
 #include "tls.h"
@@ -2449,6 +2450,8 @@ void initServerConfig(void) {
     server.bindaddr_count = CONFIG_DEFAULT_BINDADDR_COUNT;
     for (j = 0; j < CONFIG_DEFAULT_BINDADDR_COUNT; j++) server.bindaddr[j] = zstrdup(default_bindaddr[j]);
     memset(server.listeners, 0x00, sizeof(server.listeners));
+    server.rest_port = 0;
+    memset(&server.rest_listener, 0x00, sizeof(server.rest_listener));
     server.active_expire_enabled = 1;
     server.forkless_infrastructure_enabled = 0;
     server.lazy_expire_disabled = 0;
@@ -3392,7 +3395,9 @@ void initListeners(void) {
         listen_fds += listener->count;
     }
 
-    if (listen_fds == 0) {
+    initRestListener();
+
+    if (listen_fds == 0 && server.rest_listener.count == 0) {
         serverLog(LL_WARNING, "Configured to not listen anywhere, exiting.");
         exit(1);
     }
@@ -4680,7 +4685,8 @@ int processCommand(client *c) {
         struct serverCommand *cmd = c->parsed_cmd;
         if (!cmd) {
             /* Handle possible security attacks. */
-            if (!strcasecmp(objectGetVal(c->argv[0]), "host:") || !strcasecmp(objectGetVal(c->argv[0]), "post")) {
+            if (!c->flag.rest_client &&
+                (!strcasecmp(objectGetVal(c->argv[0]), "host:") || !strcasecmp(objectGetVal(c->argv[0]), "post"))) {
                 securityWarningCommand(c);
                 return C_ERR;
             }
@@ -5076,6 +5082,7 @@ void closeListeningSockets(int unlink_unix_socket) {
 
     if (server.cluster_enabled)
         for (j = 0; j < server.clistener.count; j++) close(server.clistener.fd[j]);
+    cleanRestListener();
     if (unlink_unix_socket && server.unixsocket) {
         serverLog(LL_NOTICE, "Removing the unix socket file.");
         if (unlink(server.unixsocket) != 0)

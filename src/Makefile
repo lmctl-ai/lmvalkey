@@ -602,6 +602,7 @@ ENGINE_SERVER_OBJ = \
     release.o \
     replication.o \
     resp_parser.o \
+    rest.o \
     rio.o \
     script.o \
     scripting_engine.o \
