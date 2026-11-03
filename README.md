@@ -1,16 +1,68 @@
-[![codecov](https://codecov.io/gh/valkey-io/valkey/graph/badge.svg?token=KYYSJAYC5F)](https://codecov.io/gh/valkey-io/valkey)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/valkey-io/valkey/badge)](https://securityscorecards.dev/viewer/?uri=github.com/valkey-io/valkey)
+# lmvalkey
 
-This project was forked from the open source Redis project right before the transition to their new source available licenses.
+[![Latest release](https://img.shields.io/github/v/release/lmctl-ai/lmvalkey?label=release)](https://github.com/lmctl-ai/lmvalkey/releases)
+[![CI](https://github.com/lmctl-ai/lmvalkey/actions/workflows/ci.yml/badge.svg)](https://github.com/lmctl-ai/lmvalkey/actions/workflows/ci.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](COPYING)
 
-This README is just a fast *quick start* document. More details can be found under [valkey.io](https://valkey.io/)
+**lmvalkey** is a standalone, single-executable distribution of Valkey featuring an **integrated lightweight REST web server** that requires no authentication for HTTP clients.
 
-# What is Valkey?
+- **Single Executable**: Statically linked (except system glibc), portable across Linux, macOS, and Windows.
+- **Integrated REST Web Server**: Exposes Valkey directly over HTTP with full CORS support without external proxy daemons.
+- **Zero-Auth REST**: REST clients access the database directly without needing authentication, even when Valkey's native interface has `requirepass` enabled.
 
-Valkey is a high-performance data structure server that primarily serves key/value workloads.
-It supports a wide range of native structures and an extensible plugin system for adding new data structures and access patterns.
+## Quickstart
 
-# Building Valkey using `Makefile`
+### 1. Download Pre-built Binary
+
+Download the executable for your OS from [GitHub Releases](https://github.com/lmctl-ai/lmvalkey/releases):
+- `lmvalkey-linux-x64`
+- `lmvalkey-linux-arm64`
+- `lmvalkey-macos-arm64`
+- `lmvalkey-macos-x64`
+- `lmvalkey-windows-x64.exe`
+
+### 2. Run the Server
+
+```bash
+# Start Valkey on default port 6379, or with dedicated REST port 8080:
+./lmvalkey --port 6379 --rest-port 8080
+```
+
+Both the native Redis/Valkey port and the dedicated REST port can serve requests simultaneously. HTTP requests sent to the native port are also automatically detected and served.
+
+### 3. REST API Usage
+
+```bash
+# Health check
+curl http://localhost:8080/
+
+# Ping
+curl http://localhost:8080/ping
+
+# Set key and Get key via path
+curl -X POST http://localhost:8080/set/mykey/myvalue
+curl http://localhost:8080/get/mykey
+
+# Set with request body
+curl -X POST http://localhost:8080/set/greeting -d "Hello Valkey!"
+curl http://localhost:8080/get/greeting
+
+# RESTful Key-Value endpoints
+curl -X PUT http://localhost:8080/keys/user:100 -d '{"name":"Alice"}'
+curl http://localhost:8080/keys/user:100
+curl -X DELETE http://localhost:8080/keys/user:100
+curl http://localhost:8080/keys
+
+# Run multi-argument commands via JSON array
+curl -X POST http://localhost:8080/cmd -H "Content-Type: application/json" \
+  -d '["MSET", "k1", "v1", "k2", "v2"]'
+curl -X POST http://localhost:8080/cmd -H "Content-Type: application/json" \
+  -d '["MGET", "k1", "k2"]'
+```
+
+---
+
+# Building Valkey from Source
 
 Valkey can be compiled and used on Linux, macOS, OpenBSD, NetBSD, FreeBSD.
 We support big endian and little endian architectures, and both 32 bit
