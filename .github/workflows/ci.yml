@@ -77,6 +77,17 @@ jobs:
         run: |
           make -j$(sysctl -n hw.ncpu)
 
+      - name: Setup Node and lmctl
+        if: runner.os != 'Windows'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install lmctl / lmscript
+        if: runner.os != 'Windows'
+        run: |
+          npm install -g @lmctl-ai/lmctl@staging || true
+
       - name: Setup lmconn for integration tests
         if: runner.os != 'Windows'
         run: |
@@ -156,28 +167,29 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          IS_PRERELEASE=false
-          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-            TAG="latest"
-            IS_PRERELEASE=true
+          VERSION=$(grep '#define VALKEY_VERSION ' src/version.h | awk -F'"' '{print $2}')
+          if [[ -z "$VERSION" ]]; then
+            VERSION="0.1.0"
           fi
-
-          if [[ "$TAG" == "latest" ]] && gh release view "latest" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release delete "latest" -R "$GITHUB_REPOSITORY" -y || true
-            git push --delete origin latest 2>/dev/null || true
+          TAG="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]] || [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$GITHUB_REF_NAME" == "main" ]]; then
+            TAG="v${VERSION}"
           fi
 
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Uploading assets to existing release $TAG..."
             gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/*
+            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --latest --prerelease=false
           else
             echo "Creating new release $TAG..."
-            OPTS=()
-            if [[ "$IS_PRERELEASE" == "true" ]]; then
-              OPTS+=(--prerelease --title "lmvalkey latest (rolling)")
-            else
-              OPTS+=(--title "lmvalkey ${TAG#v}")
-            fi
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" "${OPTS[@]}" --generate-notes dist/*
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --latest --title "lmvalkey ${TAG#v}" --generate-notes dist/*
+          fi
+
+      - name: Verify release with lmscript
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm install -g @lmctl-ai/lmctl@staging || true
+          if command -v lmscript >/dev/null 2>&1; then
+            lmscript install "github:$GITHUB_REPOSITORY@latest"
           fi

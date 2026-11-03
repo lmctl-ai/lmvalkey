@@ -1,0 +1,65 @@
+{
+  "dsl.schema": 2,
+  "name": "lmvalkey",
+  "types": {
+    "Valkey": {
+      "methods": {
+        "set": [
+          { "params": ["string", "string"], "returns": "bool" }
+        ],
+        "get": [
+          { "params": ["string"], "returns": "string" }
+        ],
+        "del": [
+          { "params": ["string"], "returns": "int" }
+        ],
+        "exists": [
+          { "params": ["string"], "returns": "bool" }
+        ],
+        "cmd": [
+          { "params": ["string"], "returns": "string" },
+          { "params": ["string", "string"], "returns": "string" },
+          { "params": ["string", "string", "string"], "returns": "string" }
+        ],
+        "batch": [
+          { "params": [], "returns": "Batch" }
+        ]
+      }
+    },
+    "Batch": {
+      "methods": {
+        "set": [
+          { "params": ["string", "string"], "returns": "Batch" }
+        ],
+        "get": [
+          { "params": ["string"], "returns": "Batch" }
+        ],
+        "del": [
+          { "params": ["string"], "returns": "Batch" }
+        ],
+        "cmd": [
+          { "params": ["string"], "returns": "Batch" },
+          { "params": ["string", "string"], "returns": "Batch" },
+          { "params": ["string", "string", "string"], "returns": "Batch" }
+        ],
+        "len": [
+          { "params": [], "returns": "int" }
+        ],
+        "clear": [
+          { "params": [], "returns": "void" }
+        ],
+        "exec": [
+          { "params": [], "returns": "string" }
+        ]
+      }
+    }
+  },
+  "functions": {
+    "print": [
+      { "params": ["string"], "returns": "void" }
+    ]
+  },
+  "context": {
+    "valkey": "Valkey"
+  }
+}

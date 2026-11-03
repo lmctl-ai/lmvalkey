@@ -49,6 +49,9 @@
 #include "threads_mngr.h"
 #include "fmtargs.h"
 #include "rest.h"
+void lmcode_print_schema(int json);
+void lmcode_print_signatures(void);
+int lmcode_run(int argc, char **argv);
 #include "io_threads.h"
 #include "compression.h"
 #include "tls.h"
@@ -8036,10 +8039,19 @@ __attribute__((weak)) int main(int argc, char **argv) {
 
         /* Handle special options --help and --version */
         if (strcmp(argv[1], "-v") == 0 || strcmp(argv[1], "--version") == 0) {
-            sds version = getVersion();
-            printf("Valkey server %s\n", version);
-            sdsfree(version);
+            printf("lmvalkey %s\n", VALKEY_VERSION);
             exit(0);
+        }
+        if (strcmp(argv[1], "--lmcode-schema") == 0) {
+            lmcode_print_schema(argc > 2 && strcmp(argv[2], "--json") == 0);
+            exit(0);
+        }
+        if (strcmp(argv[1], "--lmcode-signatures") == 0) {
+            lmcode_print_signatures();
+            exit(0);
+        }
+        if (strcmp(argv[1], "--lmcode") == 0) {
+            exit(lmcode_run(argc, argv));
         }
         if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0) usage();
         if (strcmp(argv[1], "--test-memory") == 0) {

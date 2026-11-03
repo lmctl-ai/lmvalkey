@@ -248,6 +248,15 @@ endif
 endif
 endif
 endif
+
+ifeq ($(uname_S),Darwin)
+    FINAL_LIBS+= -lc++
+else
+    FINAL_LIBS+= -lstdc++
+endif
+ifneq (,$(findstring MINGW,$(uname_S))$(findstring MSYS,$(uname_S)))
+    FINAL_LIBS+= -lws2_32
+endif
 endif
 endif
 endif
@@ -477,6 +486,9 @@ else
 endif
 
 SERVER_CC=$(QUIET_CC)$(CC) $(FINAL_CFLAGS) -I.
+CXX ?= g++
+FINAL_CXXFLAGS = -std=c++17 $(OPT) $(DEBUG) -I. -Iinclude
+SERVER_CXX=$(QUIET_CXX)$(CXX) $(FINAL_CXXFLAGS)
 SERVER_AR=$(QUIET_AR)$(AR)
 SERVER_LD=$(QUIET_LINK)$(CC) $(FINAL_LDFLAGS)
 ENGINE_INSTALL=$(QUIET_INSTALL)$(INSTALL)
@@ -490,6 +502,7 @@ ENDCOLOR="\033[0m"
 
 ifndef V
 QUIET_CC = @printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$@$(ENDCOLOR) 1>&2;
+QUIET_CXX = @printf '    %b %b\n' $(CCCOLOR)CXX$(ENDCOLOR) $(SRCCOLOR)$@$(ENDCOLOR) 1>&2;
 QUIET_GEN = @printf '    %b %b\n' $(CCCOLOR)GEN$(ENDCOLOR) $(SRCCOLOR)$@$(ENDCOLOR) 1>&2;
 QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$@$(ENDCOLOR) 1>&2;
 QUIET_INSTALL = @printf '    %b %b\n' $(LINKCOLOR)INSTALL$(ENDCOLOR) $(BINCOLOR)$@$(ENDCOLOR) 1>&2;
@@ -603,6 +616,7 @@ ENGINE_SERVER_OBJ = \
     replication.o \
     resp_parser.o \
     rest.o \
+    lmcode_host.o \
     rio.o \
     script.o \
     scripting_engine.o \
@@ -831,6 +845,9 @@ DEP = $(ENGINE_SERVER_OBJ:%.o=%.d) $(ENGINE_CLI_OBJ:%.o=%.d) $(ENGINE_BENCHMARK_
 # depending on a single artifact, build all dependencies first.
 %.o: %.c .make-prerequisites
 	$(SERVER_CC) -MMD -o $@ -c $<
+
+%.o: %.cpp .make-prerequisites
+	$(SERVER_CXX) -MMD -o $@ -c $<
 
 trace/%.o: trace/%.c .make-prerequisites
 	$(SERVER_CC) -Itrace -MMD -o $@ -c $<

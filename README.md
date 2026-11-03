@@ -245,6 +245,50 @@ lmconn valkey cmd <COMMAND> [args...] [--port 6379] [--mode resp|rest]
 
 ---
 
+## LMScript & `lmcode` Batch Statements
+
+`lmvalkey` embeds the `lmcode-cpp` runtime (DSLB v6), allowing LMScript (`.lms`) programs to execute type-checked bytecode directly inside or against `lmvalkey`, construct pipelined batch statements, and execute operations with minimal round-trip overhead.
+
+### Batch Operations in `.lms`
+
+```lms
+// Using installed lmvalkey host
+s = load_schema(cli="lmvalkey", install="github:lmctl-ai/lmvalkey@latest");
+p = _lmcode_ s;
+  // Direct key-value operations
+  valkey.set("user:100", "Alice");
+  let user = valkey.get("user:100");
+  print("User: " + user);
+
+  // Construct a batch statement
+  let b = valkey.batch();
+  b.set("item:1", "Apples");
+  b.set("item:2", "Oranges");
+  b.get("item:1");
+  b.get("item:2");
+
+  // Execute the entire batch in a single pipeline round-trip
+  let results = b.exec();
+  print("Batch results: " + results);
+end _lmcode_
+
+r = run_lmcode(p);
+require(r.ok, "batch execution failed");
+```
+
+### Schema & Signatures
+
+`lmvalkey` exposes its lmcode contract via standard host flags:
+```bash
+# Print compiler schema
+lmvalkey --lmcode-schema --json
+
+# Print canonical registry signatures
+lmvalkey --lmcode-signatures
+```
+
+---
+
 ## License
 
 `lmvalkey` is licensed under the [BSD-3-Clause](COPYING) license.

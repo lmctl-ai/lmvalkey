@@ -263,5 +263,53 @@ else
 fi
 
 echo "=========================================================="
+echo "TEST SECTION 6: lmcode Host and Batch Statements"
+echo "=========================================================="
+
+echo -n "Test 6.1: lmvalkey --version... "
+VER_OUT=$("$SERVER_BIN" --version)
+echo "$VER_OUT" | grep -q "lmvalkey 0.1.0" || { echo "FAIL (got $VER_OUT)"; exit 1; }
+echo "OK ($VER_OUT)"
+
+echo -n "Test 6.2: lmvalkey --lmcode-schema --json... "
+SCHEMA_OUT=$("$SERVER_BIN" --lmcode-schema --json)
+echo "$SCHEMA_OUT" | grep -q '"dsl.schema": 2' || { echo "FAIL (got $SCHEMA_OUT)"; exit 1; }
+echo "$SCHEMA_OUT" | grep -q '"Valkey"' || { echo "FAIL (missing Valkey type)"; exit 1; }
+echo "$SCHEMA_OUT" | grep -q '"Batch"' || { echo "FAIL (missing Batch type)"; exit 1; }
+echo "OK"
+
+echo -n "Test 6.3: lmvalkey --lmcode-signatures... "
+SIG_OUT=$("$SERVER_BIN" --lmcode-signatures)
+echo "$SIG_OUT" | grep -q 'context valkey: Valkey' || { echo "FAIL context (got $SIG_OUT)"; exit 1; }
+echo "$SIG_OUT" | grep -q 'method Batch.exec() -> string' || { echo "FAIL method (got $SIG_OUT)"; exit 1; }
+echo "OK"
+
+if command -v lmscript >/dev/null 2>&1; then
+    echo -n "Test 6.4: lmscript execution of batch statement via _lmcode_... "
+    LMS_TMP="$TEST_DIR/test_batch.lms"
+    cat << EOF > "$LMS_TMP"
+s = load_schema(cli="$SERVER_BIN");
+p = _lmcode_ s;
+valkey.set("lmcode_batch_k1", "lmcode_batch_v1");
+let b = valkey.batch();
+b.set("lmcode_b2", "val2");
+b.get("lmcode_batch_k1");
+b.get("lmcode_b2");
+let res = b.exec();
+print("BATCH_RES:" + res);
+end _lmcode_
+
+r = run_lmcode(p);
+require(r.ok, "host failed");
+EOF
+    LMS_OUT=$(VALKEY_PORT="$RESP_PORT" lmscript "$LMS_TMP")
+    echo "$LMS_OUT" | grep -q 'BATCH_RES:\["OK","lmcode_batch_v1","val2"\]' || { echo "FAIL (got $LMS_OUT)"; exit 1; }
+    # Verify key written to Valkey server
+    VAL_CHECK=$("$CLI_BIN" -p "$RESP_PORT" get lmcode_b2)
+    [[ "$VAL_CHECK" == "val2" ]] || { echo "FAIL server check (got $VAL_CHECK)"; exit 1; }
+    echo "OK"
+fi
+
+echo "=========================================================="
 echo "All integration tests passed successfully!"
 echo "=========================================================="
