@@ -32,6 +32,10 @@
 #include <sys/select.h>
 #include <string.h>
 
+#ifndef UNUSED
+#define UNUSED(V) ((void)V)
+#endif
+
 typedef struct aeApiState {
     fd_set rfds, wfds;
     /* We need to have a copy of the fd sets as it's not safe to reuse

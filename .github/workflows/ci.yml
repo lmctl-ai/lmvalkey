@@ -70,25 +70,31 @@ jobs:
       - name: Build Valkey (Linux)
         if: runner.os == 'Linux'
         run: |
-          make -j$(nproc) lmvalkey valkey
+          make -j$(nproc)
 
       - name: Build Valkey (macOS)
         if: runner.os == 'macOS'
         run: |
-          make -j$(sysctl -n hw.ncpu) lmvalkey valkey
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Setup lmconn for integration tests
+        if: runner.os != 'Windows'
+        run: |
+          git clone --depth 1 https://github.com/lmctl-ai/lmconn.git ../lmconn || true
 
       - name: Run Tests (POSIX)
         if: runner.os != 'Windows'
         run: |
           ./runtest --single unit/rest
           ./runtest --single unit/quit
+          ./tests/integration-test.sh
 
       - name: Build Valkey (Windows MSYS2)
         if: runner.os == 'Windows'
         shell: msys2 {0}
         continue-on-error: true
         run: |
-          make -j4 BUILD_TLS=no lmvalkey valkey || make -j4 BUILD_TLS=no
+          make -j4 BUILD_TLS=no MALLOC=libc || make -j4 BUILD_TLS=no
 
       - name: Package binary (POSIX)
         if: runner.os != 'Windows'

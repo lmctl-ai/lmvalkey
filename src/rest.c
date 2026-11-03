@@ -250,6 +250,57 @@ static int parseJsonStringArray(const char *p, size_t len, sds **argv_out, int *
     return 1;
 }
 
+/* Parse JSON object {"command":"PING","args":["a","b"]} or {"cmd":"PING"} */
+static int parseJsonObjectCommand(const char *p, size_t len, sds **argv_out, int *argc_out) {
+    const char *end = p + len;
+    while (p < end && isspace((unsigned char)*p)) p++;
+    if (p >= end || *p != '{') return 0;
+
+    /* Look for "command" or "cmd" */
+    const char *cmd_key = memmem(p, end - p, "\"command\"", 9);
+    if (!cmd_key) cmd_key = memmem(p, end - p, "\"cmd\"", 5);
+    if (!cmd_key) return 0;
+
+    const char *colon = memchr(cmd_key, ':', end - cmd_key);
+    if (!colon) return 0;
+    const char *val_start = colon + 1;
+    while (val_start < end && isspace((unsigned char)*val_start)) val_start++;
+    if (val_start >= end || *val_start != '"') return 0;
+    val_start++;
+    const char *val_end = memchr(val_start, '"', end - val_start);
+    if (!val_end) return 0;
+
+    sds cmd = sdsnewlen(val_start, val_end - val_start);
+    int cap = 8;
+    int count = 1;
+    sds *args = zmalloc(sizeof(sds) * cap);
+    args[0] = cmd;
+
+    /* Look for "args" */
+    const char *args_key = memmem(p, end - p, "\"args\"", 6);
+    if (args_key) {
+        const char *bracket = memchr(args_key, '[', end - args_key);
+        if (bracket && bracket < end) {
+            sds *sub_args = NULL;
+            int sub_count = 0;
+            if (parseJsonStringArray(bracket, end - bracket, &sub_args, &sub_count)) {
+                if (count + sub_count > cap) {
+                    cap = count + sub_count + 4;
+                    args = zrealloc(args, sizeof(sds) * cap);
+                }
+                for (int i = 0; i < sub_count; i++) {
+                    args[count++] = sub_args[i];
+                }
+                zfree(sub_args);
+            }
+        }
+    }
+
+    *argv_out = args;
+    *argc_out = count;
+    return 1;
+}
+
 /* Parse HTTP request buffer */
 void parseRestBuffer(client *c) {
     char *buf = c->querybuf + c->qb_pos;
@@ -387,9 +438,10 @@ void parseRestBuffer(client *c) {
     sds *args = NULL;
     int argc = 0;
 
-    /* POST / or /cmd or /exec with JSON array or text body */
+    /* POST / or /cmd or /exec with JSON array, JSON object, or text body */
     if (body_len > 0 && (!strcmp(path, "/") || !strcmp(path, "/cmd") || !strcmp(path, "/exec"))) {
-        if (!parseJsonStringArray(body, body_len, &args, &argc)) {
+        if (!parseJsonStringArray(body, body_len, &args, &argc) &&
+            !parseJsonObjectCommand(body, body_len, &args, &argc)) {
             args = sdsnsplitargs(body, body_len, &argc);
         }
     }
