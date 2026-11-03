@@ -7699,7 +7699,7 @@ int checkForSentinelMode(int argc, char **argv, char *exec_name) {
     if (strstr(exec_name, "redis-sentinel") != NULL) return 1;
 
     for (int j = 1; j < argc; j++)
-        if (!strcmp(argv[j], "--sentinel")) return 1;
+        if (!strcmp(argv[j], "--sentinel") || !strcmp(argv[j], "sentinel")) return 1;
     return 0;
 }
 
@@ -7968,6 +7968,14 @@ __attribute__((weak)) int main(int argc, char **argv) {
     char *exec_name = strrchr(argv[0], '/');
     if (exec_name == NULL) exec_name = argv[0];
     server.sentinel_mode = checkForSentinelMode(argc, argv, exec_name);
+
+    /* If invoked as 'valkey server ...', strip the 'server' subcommand. */
+    if (argc >= 2 && !strcmp(argv[1], "server")) {
+        argv[1] = argv[0];
+        argv++;
+        argc--;
+    }
+
     initServerConfig();
     server.pid = getpid();
     ACLInit(); /* The ACL subsystem must be initialized ASAP because the
@@ -7997,6 +8005,15 @@ __attribute__((weak)) int main(int argc, char **argv) {
         redis_check_rdb_main(argc, argv, NULL);
     else if (strstr(exec_name, "valkey-check-aof") != NULL)
         redis_check_aof_main(argc, argv);
+
+    /* Single binary subcommands: check-rdb and check-aof */
+    if (argc >= 2) {
+        if (!strcmp(argv[1], "check-rdb") || !strcmp(argv[1], "--check-rdb")) {
+            redis_check_rdb_main(argc - 1, argv + 1, NULL);
+        } else if (!strcmp(argv[1], "check-aof") || !strcmp(argv[1], "--check-aof")) {
+            redis_check_aof_main(argc - 1, argv + 1);
+        }
+    }
 
     /* valkey may install symlinks like
      * redis-server -> valkey-server, redis-check-rdb -> valkey-check-rdb,

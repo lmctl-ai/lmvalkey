@@ -16,6 +16,8 @@ dump*.rdb
 *-sentinel
 *-server
 *-unit-gtests
+src/valkey
+src/lmvalkey
 doc-tools
 release
 misc/*
