@@ -253,7 +253,7 @@ lmconn valkey cmd <COMMAND> [args...] [--port 6379] [--mode resp|rest]
 
 ```lms
 // Using installed lmvalkey host
-s = load_schema(cli="lmvalkey", install="github:lmctl-ai/lmvalkey@latest");
+s = load_schema(cli="lmvalkey" install="github:lmctl-ai/lmvalkey@latest");
 p = _lmcode_ s;
   // Direct key-value operations
   valkey.set("user:100", "Alice");
