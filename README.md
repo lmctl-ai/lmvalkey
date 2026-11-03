@@ -4,450 +4,247 @@
 [![CI](https://github.com/lmctl-ai/lmvalkey/actions/workflows/ci.yml/badge.svg)](https://github.com/lmctl-ai/lmvalkey/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](COPYING)
 
-**lmvalkey** is a standalone, single-executable distribution of Valkey featuring an **integrated lightweight REST web server** that requires no authentication for HTTP clients.
+**lmvalkey** is a standalone, single-executable Valkey server featuring an **integrated lightweight REST web server** alongside the high-performance native Redis/Valkey (RESP) protocol engine.
 
-- **Single Executable**: Statically linked (except system glibc), portable across Linux, macOS, and Windows.
-- **Integrated REST Web Server**: Exposes Valkey directly over HTTP with full CORS support without external proxy daemons.
-- **Zero-Auth REST**: REST clients access the database directly without needing authentication, even when Valkey's native interface has `requirepass` enabled.
+- **Single Static Binary**: Self-contained executable with zero external runtime dependencies.
+- **Dual-Protocol Engine**: Serves both native Redis protocol (RESP) clients and standard HTTP REST clients from a single unified datastore in memory.
+- **Zero-Auth REST Interface**: HTTP clients access endpoints (`/get`, `/set`, `/keys`, `/cmd`) directly without authentication, even when native Valkey requires a password.
+- **LMScript & lmcode Ready**: Seamlessly installed and invoked from LMScript and AI-agent environments.
 
-## Quickstart
+---
 
-### 1. Download Pre-built Binary
+## Installation
 
-Download the executable for your OS from [GitHub Releases](https://github.com/lmctl-ai/lmvalkey/releases):
-- `lmvalkey-linux-x64`
-- `lmvalkey-linux-arm64`
-- `lmvalkey-macos-arm64`
-- `lmvalkey-macos-x64`
-- `lmvalkey-windows-x64.exe`
+### Option 1: Automatic / Implicit with LMScript (Recommended)
 
-### 2. Run the Server
+When writing an LMScript (`.lms`) script, you do not need to install `lmvalkey` manually. Declaring `lmvalkey` in a `_lmcode_` block causes `lmscript` to automatically locate or fetch the appropriate pre-compiled binary for your system:
 
-```bash
-# Start Valkey on default port 6379, or with dedicated REST port 8080:
-./lmvalkey --port 6379 --rest-port 8080
+```lms
+// Script example: my-task.lms
+p = _lmcode_ cli="lmvalkey";
+// lmscript automatically resolves and downloads the lmvalkey binary for your platform
+end _lmcode_
+r = run_lmcode(p);
 ```
 
-Both the native Redis/Valkey port and the dedicated REST port can serve requests simultaneously. HTTP requests sent to the native port are also automatically detected and served.
+### Option 2: Explicit via `lmscript install`
 
-### 3. REST API Usage
+You can install `lmvalkey` directly using the LMScript package installer:
 
 ```bash
-# Health check
-curl http://localhost:8080/
+lmscript install github:lmctl-ai/lmvalkey
+```
 
-# Ping
-curl http://localhost:8080/ping
+### Option 3: Direct Download from GitHub Releases
 
-# Set key and Get key via path
-curl -X POST http://localhost:8080/set/mykey/myvalue
-curl http://localhost:8080/get/mykey
+Pre-built, standalone executables for all major platforms are available on [GitHub Releases](https://github.com/lmctl-ai/lmvalkey/releases/tag/latest):
 
-# Set with request body
-curl -X POST http://localhost:8080/set/greeting -d "Hello Valkey!"
-curl http://localhost:8080/get/greeting
+| Platform | Executable |
+| :--- | :--- |
+| **Linux (x86_64)** | `lmvalkey-linux-x64` |
+| **Linux (ARM64)** | `lmvalkey-linux-arm64` |
+| **macOS (Apple Silicon)** | `lmvalkey-macos-arm64` |
+| **macOS (Intel)** | `lmvalkey-macos-x64` |
+| **Windows (x86_64)** | `lmvalkey-windows-x64.exe` |
 
-# RESTful Key-Value endpoints
-curl -X PUT http://localhost:8080/keys/user:100 -d '{"name":"Alice"}'
-curl http://localhost:8080/keys/user:100
-curl -X DELETE http://localhost:8080/keys/user:100
-curl http://localhost:8080/keys
-
-# Run multi-argument commands via JSON array
-curl -X POST http://localhost:8080/cmd -H "Content-Type: application/json" \
-  -d '["MSET", "k1", "v1", "k2", "v2"]'
-curl -X POST http://localhost:8080/cmd -H "Content-Type: application/json" \
-  -d '["MGET", "k1", "k2"]'
+```bash
+# Example: Download and run on Linux x86_64
+curl -fsSL https://github.com/lmctl-ai/lmvalkey/releases/latest/download/lmvalkey-linux-x64 -o lmvalkey
+chmod +x lmvalkey
 ```
 
 ---
 
-# Building Valkey from Source
+## Starting the Server
 
-Valkey can be compiled and used on Linux, macOS, OpenBSD, NetBSD, FreeBSD.
-We support big endian and little endian architectures, and both 32 bit
-and 64 bit systems.
-
-It may compile on Solaris derived systems (for instance SmartOS) but our
-support for this platform is *best effort* and Valkey is not guaranteed to
-work as well as in Linux, macOS, and \*BSD.
-
-It is as simple as:
-
-    % make
-
-To build with TLS support, you'll need OpenSSL development libraries (e.g.
-libssl-dev on Debian/Ubuntu).
-
-To build TLS support as Valkey built-in:
-
-    % make BUILD_TLS=yes
-
-To build TLS as Valkey module:
-
-    % make BUILD_TLS=module
-
-Note that sentinel mode does not support TLS module.
-
-To build with experimental RDMA support you'll need RDMA development libraries
-(e.g. librdmacm-dev and libibverbs-dev on Debian/Ubuntu).
-
-To build RDMA support as Valkey built-in:
-
-    % make BUILD_RDMA=yes
-
-To build RDMA as Valkey module:
-
-    % make BUILD_RDMA=module
-
-To build with systemd support, you'll need systemd development libraries (such
-as libsystemd-dev on Debian/Ubuntu or systemd-devel on CentOS) and run:
-
-    % make USE_SYSTEMD=yes
-
-To build with enhanced stack traces that include file names and line numbers
-for all functions (including static functions), use libbacktrace:
-
-    % make USE_LIBBACKTRACE=yes
-
-Streaming RDB and replication compression can use Zstandard 1.4.7 or newer.
-Its static archive is required because Valkey uses Zstandard's
-static-linking-only custom allocator APIs to include codec allocations in
-memory accounting. Use `make BUILD_ZSTD=yes` to enable Zstandard support, and
-optionally set `ZSTD_PREFIX` for a custom installation.
-
-To build Valkey without the Lua engine:
-
-    % make BUILD_LUA=no
-
-To append a suffix to Valkey program names, use:
-
-    % make PROG_SUFFIX="-alt"
-
-You can build a 32 bit Valkey binary using:
-
-    % make 32bit
-
-After building Valkey, it is a good idea to test it using:
-
-    % make test
-
-The above runs the main integration tests. Additional tests are started using:
-
-    % make test-unit     # Unit tests
-    % make test-modules  # Tests of the module API
-    % make test-sentinel # Valkey Sentinel integration tests
-    % make test-cluster  # Valkey Cluster integration tests
-
-More about running the integration tests can be found in
-[tests/README.md](tests/README.md) and for unit tests, see
-[src/unit/README.md](src/unit/README.md).
-
-## Performance monitoring
-
-Valkey Performance Dashboards provide a consolidated view of throughput trends across versions, helping contributors validate improvements and identify regressions quickly.
-
-- [Performance Overview](https://valkey.io/performance/) - Compare throughput across Valkey versions
-- [Unstable Branch Dashboard](https://perf-dashboard.valkey.io/public-dashboards/3e45bf8ded3043edaa941331cd1a94e2) - Track performance of all commits in the unstable branch
-
-## Fixing build problems with dependencies or cached build options
-
-Valkey has some dependencies which are included in the `deps` directory.
-`make` does not automatically rebuild dependencies even if something in
-the source code of dependencies changes.
-
-When you update the source code with `git pull` or when code inside the
-dependencies tree is modified in any other way, make sure to use the following
-command in order to really clean everything and rebuild from scratch:
-
-    % make distclean
-
-This will clean: jemalloc, lua, libvalkey, linenoise and other dependencies.
-
-Also if you force certain build options like 32bit target, no C compiler
-optimizations (for debugging purposes), and other similar build time options,
-those options are cached indefinitely until you issue a `make distclean`
-command.
-
-## Fixing problems building 32 bit binaries
-
-If after building Valkey with a 32 bit target you need to rebuild it
-with a 64 bit target, or the other way around, you need to perform a
-`make distclean` in the root directory of the Valkey distribution.
-
-In case of build errors when trying to build a 32 bit binary of Valkey, try
-the following steps:
-
-* Install the package libc6-dev-i386 (also try g++-multilib).
-* Try using the following command line instead of `make 32bit`:
-  `make CFLAGS="-m32 -march=native" LDFLAGS="-m32"`
-
-## Allocator
-
-Selecting a non-default memory allocator when building Valkey is done by setting
-the `MALLOC` environment variable. Valkey is compiled and linked against libc
-malloc by default, with the exception of jemalloc being the default on Linux
-systems. This default was picked because jemalloc has proven to have fewer
-fragmentation problems than libc malloc.
-
-To force compiling against libc malloc, use:
-
-    % make MALLOC=libc
-
-To compile against jemalloc on Mac OS X systems, use:
-
-    % make MALLOC=jemalloc
-
-## Monotonic clock
-
-By default, Valkey uses the processor's internal instruction clock (TSC on x86,
-CNTVCT on ARM) for monotonic time tracking, which provides approximately 3x
-faster time access compared to POSIX clock_gettime (~10-30ns vs ~100ns).
-This is enabled by default on supported architectures (x86_64 Linux and aarch64)
-and automatically falls back to POSIX clock_gettime on unsupported systems.
-
-For more information about processor clock usage, see:
-    http://oliveryang.net/2015/09/pitfalls-of-TSC-usage/
-
-To disable the processor clock and force POSIX clock_gettime, use:
-
-    % make CFLAGS="-DNO_PROCESSOR_CLOCK"
-
-## Verbose build
-
-Valkey will build with a user-friendly colorized output by default.
-If you want to see a more verbose output, use the following:
-
-    % make V=1
-
-# Running Valkey
-
-To run Valkey with the default configuration, just type:
-
-    % cd src
-    % ./valkey-server
-
-If you want to provide your valkey.conf, you have to run it using an additional
-parameter (the path of the configuration file):
-
-    % cd src
-    % ./valkey-server /path/to/valkey.conf
-
-It is possible to alter the Valkey configuration by passing parameters directly
-as options using the command line. Examples:
-
-    % ./valkey-server --port 9999 --replicaof 127.0.0.1 6379
-    % ./valkey-server /etc/valkey/6379.conf --loglevel debug
-
-All the options in valkey.conf are also supported as options using the command
-line, with exactly the same name.
-
-# Running Valkey with TLS:
-
-## Running manually
-
-To manually run a Valkey server with TLS mode (assuming `./utils/gen-test-certs.sh`
-was invoked so sample certificates/keys are available):
-
-* TLS built-in mode:
-    ```
-    ./src/valkey-server --tls-port 6379 --port 0 \
-        --tls-cert-file ./tests/tls/valkey.crt \
-        --tls-key-file ./tests/tls/valkey.key \
-        --tls-ca-cert-file ./tests/tls/ca.crt
-    ```
-
-* TLS module mode:
-    ```
-    ./src/valkey-server --tls-port 6379 --port 0 \
-        --tls-cert-file ./tests/tls/valkey.crt \
-        --tls-key-file ./tests/tls/valkey.key \
-        --tls-ca-cert-file ./tests/tls/ca.crt \
-        --loadmodule src/valkey-tls.so
-    ```
-
-Note that you can disable TCP by specifying `--port 0` explicitly.
-It's also possible to have both TCP and TLS available at the same time,
-but you'll have to assign different ports.
-
-Use `valkey-cli` to connect to the Valkey server:
-```
-./src/valkey-cli --tls \
-    --cert ./tests/tls/valkey.crt \
-    --key ./tests/tls/valkey.key \
-    --cacert ./tests/tls/ca.crt
-```
-
-Specifying `--tls-replication yes` makes a replica connect to the primary.
-
-Using `--tls-cluster yes` makes Valkey Cluster use TLS across nodes.
-
-# Running Valkey with RDMA:
-
-Note that Valkey Over RDMA is an experimental feature.
-It may be changed or removed in any minor or major version.
-Currently, it is only supported on Linux.
-
-* RDMA built-in mode:
-    ```
-    ./src/valkey-server --protected-mode no \
-         --rdma-bind 192.168.122.100 --rdma-port 6379
-    ```
-
-* RDMA module mode:
-    ```
-    ./src/valkey-server --protected-mode no \
-         --loadmodule src/valkey-rdma.so --rdma-bind 192.168.122.100 --rdma-port 6379
-    ```
-
-It's possible to change bind address/port of RDMA by runtime command:
-
-    192.168.122.100:6379> CONFIG SET rdma-port 6380
-
-It's also possible to have both RDMA and TCP available, and there is no
-conflict of TCP(6379) and RDMA(6379), Ex:
-
-    % ./src/valkey-server --protected-mode no \
-         --loadmodule src/valkey-rdma.so --rdma-bind 192.168.122.100 --rdma-port 6379 \
-         --port 6379
-
-Note that the network card (192.168.122.100 of this example) should support
-RDMA. To test a server supports RDMA or not:
-
-    % rdma res show (a new version iproute2 package)
-Or:
-
-    % ibv_devices
-
-
-# Playing with Valkey
-
-You can use valkey-cli to play with Valkey. Start a valkey-server instance,
-then in another terminal try the following:
-
-    % cd src
-    % ./valkey-cli
-    valkey> ping
-    PONG
-    valkey> set foo bar
-    OK
-    valkey> get foo
-    "bar"
-    valkey> incr mycounter
-    (integer) 1
-    valkey> incr mycounter
-    (integer) 2
-    valkey>
-
-# Installing Valkey
-
-In order to install Valkey binaries into /usr/local/bin, just use:
-
-    % make install
-
-You can use `make PREFIX=/some/other/directory install` if you wish to use a
-different destination.
-
-_Note_: For compatibility with Redis, we create symlinks from the Redis names (`redis-server`, `redis-cli`, etc.) to the Valkey binaries installed by `make install`.
-The symlinks are created in same directory as the Valkey binaries.
-The symlinks are removed when using `make uninstall`.
-The creation of the symlinks can be skipped by setting the makefile variable `USE_REDIS_SYMLINKS=no`.
-
-`make install` will just install binaries in your system, but will not configure
-init scripts and configuration files in the appropriate place. This is not
-needed if you just want to play a bit with Valkey, but if you are installing
-it the proper way for a production system, we have a script that does this
-for Ubuntu and Debian systems:
-
-    % cd utils
-    % ./install_server.sh
-
-_Note_: `install_server.sh` will not work on macOS; it is built for Linux only.
-
-The script will ask you a few questions and will setup everything you need
-to run Valkey properly as a background daemon that will start again on
-system reboots.
-
-You'll be able to stop and start Valkey using the script named
-`/etc/init.d/valkey_<portnumber>`, for instance `/etc/init.d/valkey_6379`.
-
-# Building using `CMake`
-
-In addition to the traditional `Makefile` build, Valkey supports an alternative, **experimental**, build system using `CMake`.
-
-To build and install `Valkey`, in `Release` mode (an optimized build), type this into your terminal:
+Run `lmvalkey` specifying the native Redis/RESP port and the REST HTTP port:
 
 ```bash
-mkdir build-release
-cd $_
-cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/valkey
-sudo make install
-# Valkey is now installed under /opt/valkey
+# Listen on port 6379 for native RESP, and port 8080 for REST:
+./lmvalkey --port 6379 --rest-port 8080
+
+# Or run as a background daemon:
+./lmvalkey --port 6379 --rest-port 8080 --daemonize yes
 ```
 
-Other options supported by Valkey's `CMake` build system:
+> **Note**: HTTP requests sent to the native port (6379) are also automatically detected and served.
 
-## Special build flags
+---
 
-- `-DBUILD_TLS=<yes|no>` enable TLS build for Valkey. Default: `no`
-- `-DBUILD_RDMA=<no|module>` enable RDMA module build (only module mode supported). Default: `no`
-- `-DBUILD_ZSTD=<yes|no>` configure Zstandard streaming compression support. Default: `no`
-- `-DBUILD_MALLOC=<libc|jemalloc|tcmalloc|tcmalloc_minimal>` choose the allocator to use. Default on Linux: `jemalloc`, for other OS: `libc`
-- `-DBUILD_SANITIZER=<address|thread|undefined>` build with address sanitizer enabled. Default: disabled (no sanitizer)
-- `-DBUILD_UNIT_GTESTS=[yes|no]`  when set, the build will produce unit tests executable `valkey-unit-gtests`. Default: `no`
-- `-DBUILD_TEST_MODULES=[yes|no]`  when set, the build will include the modules located under the `tests/modules` folder. Default: `no`
-- `-DBUILD_EXAMPLE_MODULES=[yes|no]`  when set, the build will include the example modules located under the `src/modules` folder. Default: `no`
+## Unified In-Sync Data: REST (`curl`) & Native (`lmconn`)
 
-## Common flags
+`lmvalkey` maintains a single, unified in-memory database. Changes made through the REST HTTP interface are immediately visible on the native interface, and vice-versa.
 
-- `-DCMAKE_BUILD_TYPE=<Debug|Release...>` define the build type, see CMake manual for more details
-- `-DCMAKE_INSTALL_PREFIX=/installation/path` override this value to define a custom install prefix. Default: `/usr/local`
-- `-G"<Generator Name>"` generate build files for "Generator Name". By default, CMake will generate `Makefile`s.
+Below are step-by-step examples using **`curl`** (for the REST interface) and **`lmconn`** (for the native RESP interface).
 
-## Verbose build
+### Scenario A: Write via REST (`curl`) $\rightarrow$ Read via Native (`lmconn`)
 
-`CMake` generates a user-friendly colorized output by default.
-If you want to see a more verbose output, use the following:
+1. **Write data via the REST interface with `curl`:**
+   ```bash
+   curl -X POST http://localhost:8080/set/user:42 -d '{"name":"Alice","role":"admin"}'
+   ```
+   *Response:*
+   ```json
+   {"ok":true,"result":"OK"}
+   ```
+
+2. **Read the exact same data via the Native RESP interface using `lmconn`:**
+   ```bash
+   lmconn valkey get user:42 --port 6379 --mode resp
+   ```
+   *Output:*
+   ```json
+   {
+     "ok": true,
+     "result": {
+       "mode": "resp",
+       "host": "127.0.0.1",
+       "port": 6379,
+       "result": "{\"name\":\"Alice\",\"role\":\"admin\"}"
+     }
+   }
+   ```
+
+---
+
+### Scenario B: Write via Native (`lmconn`) $\rightarrow$ Read via REST (`curl`)
+
+1. **Write data via the Native interface using `lmconn`:**
+   ```bash
+   lmconn valkey set session:xyz "active-user-token" --port 6379 --mode resp
+   ```
+   *Output:*
+   ```json
+   {
+     "ok": true,
+     "result": {
+       "mode": "resp",
+       "host": "127.0.0.1",
+       "port": 6379,
+       "result": "OK"
+     }
+   }
+   ```
+
+2. **Read the exact same key via the REST interface with `curl`:**
+   ```bash
+   curl http://localhost:8080/get/session:xyz
+   ```
+   *Response:*
+   ```json
+   {
+     "ok": true,
+     "result": "active-user-token"
+   }
+   ```
+
+---
+
+### Scenario C: Multi-key Commands and Sync
+
+1. **Write multiple keys atomically via native command in `lmconn`:**
+   ```bash
+   lmconn valkey cmd MSET metrics:cpu "42%" metrics:mem "68%" --port 6379 --mode resp
+   ```
+
+2. **Retrieve all keys matching a pattern via REST:**
+   ```bash
+   curl http://localhost:8080/keys/metrics:*
+   ```
+   *Response:*
+   ```json
+   {
+     "ok": true,
+     "result": ["metrics:cpu", "metrics:mem"]
+   }
+   ```
+
+3. **Execute arbitrary command (`MGET`) via REST JSON body:**
+   ```bash
+   curl -X POST http://localhost:8080/cmd \
+     -H "Content-Type: application/json" \
+     -d '{"command": "MGET", "args": ["metrics:cpu", "metrics:mem"]}'
+   ```
+   *Response:*
+   ```json
+   {
+     "ok": true,
+     "result": ["42%", "68%"]
+   }
+   ```
+
+---
+
+### Scenario D: Authentication Bypass for REST
+
+When Valkey is configured with a password (`requirepass secret123`):
+
+1. **Native RESP clients must authenticate:**
+   ```bash
+   lmconn valkey ping --port 6379 --mode resp
+   # Error: (error) NOAUTH Authentication required.
+   ```
+
+2. **REST clients access the database directly without authentication:**
+   ```bash
+   curl http://localhost:8080/ping
+   # Output: {"ok":true,"result":"PONG"}
+
+   curl http://localhost:8080/get/user:42
+   # Output: {"ok":true,"result":"{\"name\":\"Alice\",\"role\":\"admin\"}"}
+   ```
+
+---
+
+## REST API Reference
+
+All REST endpoints return JSON envelopes in the format:
+```json
+{"ok": true, "result": ...}
+```
+or on error:
+```json
+{"ok": false, "error": "Error description"}
+```
+
+| Method | Path | Description | Example |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/` | Health check & server status | `curl http://localhost:8080/` |
+| `GET` | `/ping` | Server ping | `curl http://localhost:8080/ping` |
+| `GET` | `/get/<key>` | Get string value of key | `curl http://localhost:8080/get/mykey` |
+| `POST` | `/set/<key>` | Set value of key via request body | `curl -X POST http://localhost:8080/set/mykey -d "value"` |
+| `POST` | `/set/<key>/<val>` | Set value of key via path | `curl -X POST http://localhost:8080/set/mykey/value` |
+| `GET` | `/keys` | List all keys (`KEYS *`) | `curl http://localhost:8080/keys` |
+| `GET` | `/keys/<pattern>` | List keys matching pattern | `curl http://localhost:8080/keys/user:*` |
+| `PUT` | `/keys/<key>` | RESTful set key value | `curl -X PUT http://localhost:8080/keys/item:1 -d '{"id":1}'` |
+| `DELETE` | `/keys/<key>` | Delete a key | `curl -X DELETE http://localhost:8080/keys/item:1` |
+| `POST` | `/cmd` | Execute arbitrary command | `curl -X POST http://localhost:8080/cmd -d '["INFO"]'` |
+
+---
+
+## Native Client Reference (`lmconn`)
+
+`lmconn` provides a zero-dependency CLI client for Valkey supporting both RESP and REST modes:
 
 ```bash
-make VERBOSE=1
+# Ping server
+lmconn valkey ping [--port 6379] [--mode resp|rest]
+
+# Set a key
+lmconn valkey set <key> <value> [--port 6379] [--mode resp|rest]
+
+# Get a key
+lmconn valkey get <key> [--port 6379] [--mode resp|rest]
+
+# Delete a key
+lmconn valkey del <key> [--port 6379] [--mode resp|rest]
+
+# Run arbitrary command
+lmconn valkey cmd <COMMAND> [args...] [--port 6379] [--mode resp|rest]
 ```
 
-## Troubleshooting
+---
 
-During the `CMake` stage, `CMake` caches variables in a local file named `CMakeCache.txt`. All variables generated by Valkey
-are removed from the cache once consumed (this is done by calling to `unset(VAR-NAME CACHE)`). However, some variables,
-like the compiler path, are kept in cache. To start a fresh build either remove the cache file `CMakeCache.txt` from the
-build folder, or delete the build folder completely.
+## License
 
-**It is important to re-run `CMake` when adding new source files.**
-
-## Integration with IDE
-
-During the `CMake` stage of the build, `CMake` generates a JSON file named `compile_commands.json` and places it under the
-build folder. This file is used by many IDEs and text editors for providing code completion (via `clangd`).
-
-A small caveat is that these tools will look for `compile_commands.json` under the Valkey's top folder.
-A common workaround is to create a symbolic link to it:
-
-```bash
-cd /path/to/valkey/
-# We assume here that your build folder is `build-release`
-ln -sf $(pwd)/build-release/compile_commands.json $(pwd)/compile_commands.json
-```
-
-Restart your IDE and voila
-
-# Code contributions
-
-Please see the [CONTRIBUTING.md][2]. For security bugs and vulnerabilities, please see [SECURITY.md][3].
-
-# Valkey is an open community project under LF Projects
-
-Valkey a Series of LF Projects, LLC
-2810 N Church St, PMB 57274
-Wilmington, Delaware 19802-4447
-
-[1]: https://github.com/valkey-io/valkey/blob/unstable/COPYING
-[2]: https://github.com/valkey-io/valkey/blob/unstable/CONTRIBUTING.md
-[3]: https://github.com/valkey-io/valkey/blob/unstable/SECURITY.md
+`lmvalkey` is licensed under the [BSD-3-Clause](COPYING) license.
