@@ -308,6 +308,44 @@ EOF
     VAL_CHECK=$("$CLI_BIN" -p "$RESP_PORT" get lmcode_b2)
     [[ "$VAL_CHECK" == "val2" ]] || { echo "FAIL server check (got $VAL_CHECK)"; exit 1; }
     echo "OK"
+
+    echo -n "Test 6.5: lmscript execution of std REST endpoints & stateless CLI via _lmcode_... "
+    LMS_REST_TMP="$TEST_DIR/test_rest_cli.lms"
+    cat << EOF > "$LMS_REST_TMP"
+s = load_schema(cli="$SERVER_BIN");
+p = _lmcode_ s;
+@"--prefix"
+fn opt_prefix(x: RestExchange) -> void implements CliOption {
+  x.set("prefix", x.query("prefix"));
+}
+
+@"kv-set"
+fn cli_set(x: RestExchange) -> void implements CliCommand {
+  let k = x.get("prefix") + ":" + x.query("key");
+  valkey.set(k, x.body());
+  x.send("SET:" + k + "=" + valkey.get(k));
+}
+
+@"/kv/:key"
+fn get_kv(x: RestExchange) -> void implements RestGet {
+  let k = x.get("prefix") + ":" + x.param("key");
+  x.json("{\"key\":\"" + k + "\",\"value\":\"" + valkey.get(k) + "\"}");
+}
+
+rest_config("session", "global");
+let args1 = str_split("--prefix=app --key=greeting kv-set -- hello_std_rest", " ");
+print(rest_cli(args1));
+let args2 = str_split("--prefix=app /kv/greeting", " ");
+print(rest_cli(args2));
+end _lmcode_
+
+r = run_lmcode(p);
+require(r.ok, "std rest/cli host failed");
+EOF
+    LMS_REST_OUT=$(VALKEY_PORT="$RESP_PORT" lmscript "$LMS_REST_TMP")
+    echo "$LMS_REST_OUT" | grep -q 'SET:app:greeting=hello_std_rest' || { echo "FAIL CLI set (got $LMS_REST_OUT)"; exit 1; }
+    echo "$LMS_REST_OUT" | grep -q '{"key":"app:greeting","value":"hello_std_rest"}' || { echo "FAIL REST get (got $LMS_REST_OUT)"; exit 1; }
+    echo "OK"
 fi
 
 echo "=========================================================="

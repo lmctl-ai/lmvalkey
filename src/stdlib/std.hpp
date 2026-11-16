@@ -12,6 +12,7 @@
 #include "encoding.hpp"
 #include "result.hpp"
 #include "invocation.hpp"
+#include "rest.hpp"
 #undef DSLVM_STD_BUILDING
 
 namespace dslvm {
@@ -21,6 +22,29 @@ struct StdRuntime {
   ResultSink* result_sink = nullptr; // external lifetime, outside collection reset
   std::atomic<bool> running{false};
 };
+namespace rest {
+inline void RestController::call_entry_isolated(size_t entry_idx, Exchange& x) {
+  auto rt = registry_ ? registry_->std_runtime() : nullptr;
+  const bool was_running = rt && rt->running.load(std::memory_order_relaxed);
+  Collections saved_collections;
+  struct Restore {
+    std::shared_ptr<StdRuntime> rt;
+    Collections& saved;
+    bool was_running;
+    ~Restore() {
+      if (was_running && rt) {
+        std::swap(rt->collections, saved);
+        rt->running.store(true, std::memory_order_release);
+      }
+    }
+  } restore{rt, saved_collections, was_running};
+  if (was_running && rt) {
+    std::swap(rt->collections, saved_collections);
+    rt->running.store(false, std::memory_order_release);
+  }
+  program_->call(entry_idx, context_, *registry_, {Value::object("RestExchange", &x)});
+}
+} // namespace rest
 } // namespace stdlib
 
 inline Registry::Registry(StdMode mode) {
@@ -43,10 +67,12 @@ inline Registry& register_std(Registry& registry) {
   stdlib::register_containers(candidate, candidate.std_runtime_->collections);
   stdlib::register_json(candidate, candidate.std_runtime_->collections);
   stdlib::register_results(candidate, candidate.std_runtime_->result_sink);
+  auto rest_ctrl = stdlib::rest::register_rest(candidate);
   const auto after = candidate.signatures();
   std::set_difference(after.begin(), after.end(), before.begin(), before.end(), std::back_inserter(candidate.std_signatures_));
   candidate.std_initialized_ = true;
   registry = std::move(candidate);
+  rest_ctrl->bind_registry(&registry);
   return registry;
 }
 

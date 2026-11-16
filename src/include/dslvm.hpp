@@ -179,6 +179,8 @@ inline std::string signature_text(const Signature& s) { std::string out = "("; f
 namespace stdlib { struct Collections; struct StdRuntime; }
 enum class StdMode { Enabled, Disabled };
 class ResultSink;
+class Program;
+class Context;
 inline Registry& register_std(Registry&);
 
 class Registry {
@@ -240,6 +242,36 @@ class Registry {
     methods_.emplace(std::move(key), NamedMethod{type, name, MethodEntry{std::move(sig), std::move(fn), std::move(dry_slot.callback)}});
     return *this;
   }
+  Registry& override_std_function(const std::string& name, std::vector<std::string> params, std::string returns, Function fn, DryFunction dry_slot) {
+    Signature sig{std::move(params), std::move(returns)};
+    std::string key = "fn " + name + signature_text(sig);
+    auto it = functions_.find(key);
+    if (it != functions_.end() && std::binary_search(std_signatures_.begin(), std_signatures_.end(), key)) {
+      it->second.entry.fn = std::move(fn);
+      it->second.entry.dry_fn = std::move(dry_slot.callback);
+      return *this;
+    }
+    return function(name, std::move(sig.params), std::move(sig.returns), std::move(fn), std::move(dry_slot));
+  }
+  Registry& override_std_method(const std::string& type, const std::string& name, std::vector<std::string> params, std::string returns, Method fn, DryMethod dry_slot) {
+    Signature sig{std::move(params), std::move(returns)};
+    std::string key = "method " + type + "." + name + signature_text(sig);
+    auto it = methods_.find(key);
+    if (it != methods_.end() && std::binary_search(std_signatures_.begin(), std_signatures_.end(), key)) {
+      it->second.entry.fn = std::move(fn);
+      it->second.entry.dry_fn = std::move(dry_slot.callback);
+      return *this;
+    }
+    return method(type, name, std::move(sig.params), std::move(sig.returns), std::move(fn), std::move(dry_slot));
+  }
+  void set_rest_hooks(std::shared_ptr<void> controller,
+                      std::function<bool(const Program&, const Context&, const Registry&)> before_run,
+                      std::function<void()> after_run) {
+    rest_controller_ = std::move(controller);
+    before_body_run_ = std::move(before_run);
+    after_body_run_ = std::move(after_run);
+  }
+  const std::shared_ptr<stdlib::StdRuntime>& std_runtime() const { return std_runtime_; }
   Registry& context(const std::string& name, const std::string& type) {
     if (!context_.emplace(name, type).second) throw Error("LOAD_UNBOUND", "registry: context '" + name + "' is declared twice");
     return *this;
@@ -279,6 +311,7 @@ class Registry {
     std::vector<std::string> have; for (auto& m : methods_) if (m.second.type + "." + m.second.name == name) have.push_back(m.first); std::sort(have.begin(), have.end()); std::string out; for (const auto& s : have) out += (out.empty() ? "" : ", ") + s; return out;
   }
  private:
+  friend class Program;
   friend Registry& register_std(Registry&);
   void begin_std_run() const;
   void end_std_run() const noexcept;
@@ -286,6 +319,9 @@ class Registry {
   std::ostream* std_output_ = &std::cout;
   std::vector<std::string> std_signatures_;
   std::shared_ptr<stdlib::StdRuntime> std_runtime_;
+  std::shared_ptr<void> rest_controller_;
+  std::function<bool(const Program&, const Context&, const Registry&)> before_body_run_;
+  std::function<void()> after_body_run_;
   std::map<std::string, NamedFunction> functions_;
   std::map<std::string, NamedMethod> methods_;
   std::map<std::string, std::string> context_;
@@ -532,7 +568,10 @@ class Program {
 
   // Executes the chunk once. The host's objects come from ctx (declared names only).
   void run(const Context& ctx, const Registry& reg, RunStats* stats = nullptr) const {
+    const Registry& active_reg = bound_registry_ ? *bound_registry_ : reg;
+    const bool auto_rest = !ctx.dry() && active_reg.before_body_run_ && active_reg.before_body_run_(*this, ctx, active_reg);
     execute(code_, lines_, loops_, max_stack_, std::vector<Value>(locals_.size()), false, ctx, reg, stats);
+    if (auto_rest && active_reg.after_body_run_) active_reg.after_body_run_();
   }
 
   // The rule entries, in source order.

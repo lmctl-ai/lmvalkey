@@ -276,6 +276,40 @@ r = run_lmcode(p);
 require(r.ok, "batch execution failed");
 ```
 
+### Standard REST Endpoints & Stateless CLI in `.lms`
+
+`lmvalkey` includes the `lmcode` standard REST router and stateless CLI interfaces (`RestGet`, `RestPost`, `RestHandler`, `CliCommand`, `CliOption`, `rest_config`, `rest_serve`, `rest_cli`):
+
+```lms
+s = load_schema(cli="lmvalkey" install="github:lmctl-ai/lmvalkey@latest");
+p = _lmcode_ s;
+  @"--prefix"
+  fn opt_prefix(x: RestExchange) -> void implements CliOption {
+    x.set("prefix", x.query("prefix"));
+  }
+
+  @"/kv/:key"
+  fn get_kv(x: RestExchange) -> void implements RestGet {
+    let k = x.get("prefix") + ":" + x.param("key");
+    x.json("{\"key\":\"" + k + "\",\"value\":\"" + valkey.get(k) + "\"}");
+  }
+
+  @"kv-set"
+  fn set_kv(x: RestExchange) -> void implements CliCommand {
+    let k = x.get("prefix") + ":" + x.query("key");
+    valkey.set(k, x.body());
+    x.send("OK:" + k);
+  }
+
+  rest_config("session", "global");
+  print(rest_cli(str_split("--prefix=app --key=user1 kv-set -- Alice", " ")));
+  print(rest_cli(str_split("--prefix=app /kv/user1", " ")));
+end _lmcode_
+
+r = run_lmcode(p);
+require(r.ok, "rest/cli execution failed");
+```
+
 ### Schema & Signatures
 
 `lmvalkey` exposes its lmcode contract via standard host flags:

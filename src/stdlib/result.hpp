@@ -18,6 +18,7 @@ class ResultSink {
   ResultContract contract_;
   stdlib::JsonNode root_;
   bool sealed_=false;
+  bool written_=false;
   void writable() const { if(sealed_)throw Error("lmcode return: result sink is sealed"); }
   void field_key(const std::string& key) const {
     writable();
@@ -37,17 +38,18 @@ public:
   explicit ResultSink(ResultContract contract={}):contract_(std::move(contract)){}
   ResultSink(const ResultSink&)=delete;
   ResultSink& operator=(const ResultSink&)=delete;
-  void reset() { writable();root_=stdlib::JsonNode{}; }
-  void set_null() { writable();stdlib::JsonNode n;contract_.validate(n);root_=std::move(n); }
+  void reset() { writable();root_=stdlib::JsonNode{};written_=false; }
+  bool written() const noexcept { return written_; }
+  void set_null() { writable();stdlib::JsonNode n;contract_.validate(n);root_=std::move(n);written_=true; }
   void set(const Value& value) {
     writable();auto next=stdlib::result_detail::copy_value(value);
-    contract_.validate_source(value);contract_.validate(next);root_=std::move(next);
+    contract_.validate_source(value);contract_.validate(next);root_=std::move(next);written_=true;
   }
   void put(const std::string& key,const Value& value) {
     field_key(key);auto next=stdlib::result_detail::copy_value(value,stdlib::result_detail::ptr("",key));
-    contract_.validate_field_source(key,value);put_owned(key,std::move(next));
+    contract_.validate_field_source(key,value);put_owned(key,std::move(next));written_=true;
   }
-  void put_null(const std::string& key) { field_key(key);put_owned(key,stdlib::JsonNode{}); }
+  void put_null(const std::string& key) { field_key(key);put_owned(key,stdlib::JsonNode{});written_=true; }
   std::string json() const { return stdlib::result_detail::encode(root_); }
   bool sealed()const{return sealed_;}
   const ResultContract& contract()const{return contract_;}
