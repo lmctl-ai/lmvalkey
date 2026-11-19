@@ -4,6 +4,8 @@
 [![CI](https://github.com/lmctl-ai/lmvalkey/actions/workflows/ci.yml/badge.svg)](https://github.com/lmctl-ai/lmvalkey/actions/workflows/ci.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](COPYING)
 
+**Documentation:** [Quick reference](https://www.lmctl.com/tools/lmvalkey/) · [LLM skill](https://www.lmctl.com/tools/lmvalkey/skill.html) · [Guide](https://www.lmctl.com/tools/lmvalkey/guide.html) · [Reference](https://www.lmctl.com/tools/lmvalkey/reference.html)
+
 **lmvalkey** is a standalone, single-executable Valkey server featuring an **integrated lightweight REST web server** alongside the high-performance native Redis/Valkey (RESP) protocol engine.
 
 - **Single Static Binary**: Self-contained executable with zero external runtime dependencies.
